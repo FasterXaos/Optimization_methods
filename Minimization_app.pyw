@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout,
                              QComboBox, QLineEdit, QPushButton, QHBoxLayout, QFrame)
 from PyQt5.QtGui import QPixmap
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from scipy.optimize import minimize_scalar
 
 class MinimizationApp(QWidget):
     def __init__(self):
@@ -163,17 +164,17 @@ class MinimizationApp(QWidget):
         
         return simplex[0]
 
-    def gradientDescentOptimization(self, x0, momentumCoefficient = 0.9, tolerance=1e-8, maxIterations=10000):
+    def gradientDescentOptimization(self, x0, tolerance=1e-8, maxIterations=10000):
         currentPoint = np.array(x0, dtype=float)
-        velocity = np.zeros_like(currentPoint)
 
         for iteration in range(maxIterations):
             gradientVector = np.array(self.computeGradient(currentPoint))
-            gradientVector = np.clip(gradientVector, -10, 10)
-            alpha = 0.01 / (1 + iteration / 100)
+            
+            def line_search(alpha):
+                return self.computeObjectiveFunction(currentPoint - alpha * gradientVector)
 
-            velocity = momentumCoefficient * velocity + alpha * gradientVector
-            currentPoint = currentPoint - velocity
+            alpha = minimize_scalar(line_search).x
+            currentPoint = currentPoint - alpha * gradientVector
 
             print(f"Iteration {iteration}: x = {currentPoint}")
 
@@ -182,18 +183,20 @@ class MinimizationApp(QWidget):
 
         return currentPoint
 
-
     def conjugateGradient(self, x0, tolerance=1e-8, maxIterations=10000):
         currentPoint = np.array(x0, dtype=float)
         gradientVector = self.computeGradient(currentPoint)
         searchDirection = -gradientVector
 
-        for iteration  in range(maxIterations):
+        for iteration in range(maxIterations):
             if np.linalg.norm(gradientVector) < tolerance:
                 break
 
-            stepSize = self.lineSearch(currentPoint, searchDirection)
-            newPoint = currentPoint + stepSize * searchDirection
+            def line_search(alpha):
+                return self.computeObjectiveFunction(currentPoint - alpha * searchDirection)
+            
+            alpha = minimize_scalar(line_search).x
+            newPoint = currentPoint - alpha * searchDirection
             newGradientVector = self.computeGradient(newPoint)
 
             # β (Fletcher-Reeves)
